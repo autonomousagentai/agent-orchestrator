@@ -12,7 +12,7 @@ a configurable "shipper" (open a PR, save a deliverable, just record).
    │ outer orchestrator (this service)                          │
    │                                                            │
    │  loop:                                                     │
-   │    workspace.prepare()           ← reset / snapshot         │
+   │    workspace.prepare()           ← reset / snapshot        │
    │    before = backlog.snapshot()                             │
    │    skip = shipper.in_flight_slugs()                        │
    │    spawn Claude session ───────────────────────┐           │
