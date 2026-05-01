@@ -1,0 +1,53 @@
+# Example: drive a coding project's BACKLOG.md against a GitHub repo,
+# opening + auto-merging PRs as the agent fleet completes tasks.
+
+[orchestrator]
+poll_interval_seconds   = 60
+watch_interval_seconds  = 30
+no_progress_pause_after = 3
+daily_budget_usd        = 25.0
+cycle_budget_usd        = 2.0
+
+[paths]
+workspaces_dir = "./workspaces"
+logs_dir       = "./logs"
+db_path        = "./state.db"
+
+[agents]
+model           = "claude-sonnet-4-6"
+max_turns       = 200
+permission_mode = "acceptEdits"
+# Pull in the target repo's .claude/ dir so the in-session agent has access
+# to its subagents, skills, and project rules.
+setting_sources = ["project"]
+prompt_file     = "./prompts/cycle.md"
+
+[backlog]
+type             = "markdown"
+# The backlog file lives inside the cloned repo.
+path             = "./workspaces/repo/BACKLOG.md"
+status_field     = "Status"
+done_values      = ["Done"]
+acceptance_field = "Acceptance"
+
+[workspace]
+type = "git"
+
+[workspace.git]
+repo            = "your-org/your-repo"
+base_branch     = "main"
+git_user_name   = "agent-orchestrator"
+git_user_email  = "agent@noreply.local"
+# Optional: run before commit so CI doesn't trip on style.
+# autofix_command = ["ruff", "check", "--fix", "."]
+
+[shipper]
+type = "git_pr"
+
+[shipper.git_pr]
+feature_prefix    = "feature/"
+required_workflow = "ci"
+opened_label      = "agent-pr"
+merged_label      = "agent-merged"
+escalate_label    = "needs-human"
+auto_squash_merge = true

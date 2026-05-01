@@ -1,0 +1,31 @@
+[Unit]
+Description=agent-orchestrator (autonomous Claude agent fleet driving a backlog)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=orchestrator
+WorkingDirectory=/opt/agent-orchestrator
+EnvironmentFile=/opt/agent-orchestrator/.env
+ExecStart=/opt/agent-orchestrator/.venv/bin/agent-orchestrator -c /opt/agent-orchestrator/config.toml
+Restart=always
+RestartSec=10
+# Generous timeout — finishing in-flight agent runs can take minutes.
+TimeoutStopSec=600
+KillSignal=SIGTERM
+StandardOutput=append:/opt/agent-orchestrator/logs/stdout.log
+StandardError=append:/opt/agent-orchestrator/logs/stderr.log
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/agent-orchestrator
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,47 @@
+# Example: drive a marketing/content backlog. The agent produces deliverables
+# (briefs, copy, blog drafts) into a working dir; the orchestrator copies each
+# completed task's outputs into ./deliverables/<slug>/.
+
+[orchestrator]
+poll_interval_seconds   = 60
+watch_interval_seconds  = 60
+no_progress_pause_after = 3
+daily_budget_usd        = 15.0
+cycle_budget_usd        = 1.5
+
+[paths]
+workspaces_dir = "./workspaces"
+logs_dir       = "./logs"
+db_path        = "./state.db"
+
+[agents]
+model           = "claude-sonnet-4-6"
+max_turns       = 100
+permission_mode = "acceptEdits"
+prompt_file     = "./prompts/cycle.md"
+
+[backlog]
+# The marketing backlog can use a different vocabulary — e.g. Stage instead
+# of Status, with "Published" as the terminal state.
+type             = "markdown"
+path             = "./workspace/BACKLOG.md"
+status_field     = "Stage"
+done_values      = ["Published", "Done"]
+acceptance_field = "Acceptance"
+
+[workspace]
+type = "directory"
+
+[workspace.directory]
+path            = "./workspace"
+# scratch/ is wiped at the start of every cycle.
+wipe_subdirs    = ["scratch"]
+ignore_patterns = [".git", "__pycache__", ".DS_Store"]
+
+[shipper]
+type = "directory"
+
+[shipper.directory]
+deliverables_dir           = "./deliverables"
+version_existing           = true
+reset_workspace_after_ship = true

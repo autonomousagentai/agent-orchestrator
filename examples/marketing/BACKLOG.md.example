@@ -1,0 +1,52 @@
+# Marketing & Content Backlog
+
+The orchestrator picks the highest-priority Ready task, produces the deliverable
+into the workspace, flips the Stage, and the Directory shipper moves the result
+into ./deliverables/<slug>/.
+
+---
+
+### q2-launch-blog-draft: Draft launch blog post for Q2 product release
+
+- **Type:** blog
+- **Stage:** Ready
+- **Priority:** P1
+- **Owner:** copywriter
+- **Audience:** existing customers, US/EU
+- **Tone:** confident, plain-language, no jargon
+- **Channel:** company blog
+- **Word-Count:** 800-1000
+- **Depends-On:**
+- **Acceptance:**
+  - Hook in first 60 words
+  - 3 concrete customer-facing improvements named
+  - One pull-quote from product lead (placeholder ok)
+  - SEO meta description ≤ 155 chars
+  - Internal links to /pricing and /docs/changelog
+
+### linkedin-thread-launch: 5-post LinkedIn thread teasing Q2 launch
+
+- **Type:** social
+- **Stage:** Ready
+- **Priority:** P2
+- **Owner:** copywriter
+- **Channel:** LinkedIn (founder account)
+- **Depends-On: ** q2-launch-blog-draft
+- **Acceptance:**
+  - 5 posts, each ≤ 1300 chars
+  - One number/stat per post
+  - Final post links to the launch blog
+  - Output as `linkedin-thread.md` with each post as a separate H3
+
+### competitor-positioning-brief: One-pager on competitor X's new pricing
+
+- **Type:** brief
+- **Stage:** Ready
+- **Priority:** P1
+- **Owner:** strategist
+- **Depends-On:**
+- **Acceptance:**
+  - Side-by-side feature/price table
+  - 3 talking points for sales
+  - "What we should change" section, ≤ 150 words
+  - Cite at least 3 sources with URLs

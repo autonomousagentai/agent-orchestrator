@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Local config / secrets
+config.toml
+.env
+*.env.local
+
+# Runtime data
+state.db
+state.db-*
+logs/
+workspaces/
+deliverables/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Test / lint caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/

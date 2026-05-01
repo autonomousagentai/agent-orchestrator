@@ -1,0 +1,35 @@
+# Engineering Backlog
+
+Each `### slug: Title` block below is one work item. The orchestrator picks
+the highest-priority Ready task whose dependencies are Done, dispatches it,
+flips the task to Done, and ships a PR.
+
+---
+
+### add-rate-limit-middleware: Add per-IP rate limiting to the public API
+
+- **Type:** implementation
+- **Status:** Ready
+- **Priority:** P1
+- **Owner:** developer
+- **Depends-On:**
+- **Files-Allowed:** src/api/middleware/, tests/api/middleware/
+- **Files-Forbidden:** src/db/, src/auth/
+- **Acceptance:**
+  - 60 req/min default, configurable per-route
+  - Returns 429 with `Retry-After` header on overflow
+  - Unit tests cover overflow + reset window
+  - No regression in existing API tests
+
+### fix-search-empty-query: Search endpoint 500s on empty query string
+
+- **Type:** bugfix
+- **Status:** Ready
+- **Priority:** P0
+- **Owner:** developer
+- **Depends-On:**
+- **Files-Allowed:** src/api/search.py, tests/api/test_search.py
+- **Acceptance:**
+  - Empty `q=` returns 400 with a helpful error body
+  - Existing search tests still pass
+  - Add a regression test reproducing the original 500

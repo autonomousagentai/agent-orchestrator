@@ -1,0 +1,37 @@
+# Example: a personal research / triage backlog. The agent edits the backlog
+# file in place (adding Result notes, links, etc.) and the orchestrator just
+# records that the cycle ran. Useful when the backlog itself IS the deliverable.
+
+[orchestrator]
+poll_interval_seconds   = 120
+watch_interval_seconds  = 60
+no_progress_pause_after = 3
+daily_budget_usd        = 5.0
+cycle_budget_usd        = 0.5
+
+[paths]
+workspaces_dir = "./workspaces"
+logs_dir       = "./logs"
+db_path        = "./state.db"
+
+[agents]
+model           = "claude-haiku-4-5"
+max_turns       = 80
+permission_mode = "acceptEdits"
+prompt_file     = "./prompts/cycle.md"
+
+[backlog]
+type             = "markdown"
+path             = "./workspace/QUESTIONS.md"
+status_field     = "Status"
+done_values      = ["Answered"]
+acceptance_field = "Acceptance"
+
+[workspace]
+type = "directory"
+
+[workspace.directory]
+path = "./workspace"
+
+[shipper]
+type = "noop"

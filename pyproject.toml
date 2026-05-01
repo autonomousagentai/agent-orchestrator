@@ -1,0 +1,36 @@
+[project]
+name = "agent-orchestrator"
+version = "0.1.0"
+description = "Generic autonomous orchestrator that drives a Claude agent fleet against any backlog file"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Fleming Slone" }]
+dependencies = [
+  "claude-agent-sdk>=0.1.71",
+  "anyio>=4.0",
+  "tomli>=2.0.1; python_version<'3.11'",
+]
+
+[project.optional-dependencies]
+git = ["PyGithub>=2.4.0"]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[project.scripts]
+agent-orchestrator = "agent_orchestrator.__main__:main"
+agent-orchestrator-status = "agent_orchestrator.status:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["agent_orchestrator*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501"]
