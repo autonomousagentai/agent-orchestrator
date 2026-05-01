@@ -68,7 +68,7 @@ in `examples/`:
 The default `MarkdownBacklog` parser expects this shape (the field names are
 configurable — `status_field`, `done_values`, `acceptance_field`):
 
-```markdown
+```
 ### my-task-slug: Free-text title
 
 - **Status:** Ready

@@ -141,7 +141,7 @@ acceptance_field = "Acceptance"       # field whose value is a bullet list
 
 ### Backlog schema (markdown)
 
-```markdown
+```
 ### task-slug: Free-text title
 
 - **Status:** Ready
