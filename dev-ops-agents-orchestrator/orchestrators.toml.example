@@ -1,0 +1,98 @@
+# Registry of agent-orchestrator deployments this dev-ops fleet watches.
+#
+# The monitor subagent reads this file at the start of every cycle to know:
+#   - which logs/transcripts to scan
+#   - which repo to clone (or pull) into monitored/<name>/ for diagnosis + fixes
+#   - which credential to use when pushing a fix branch
+#   - who to escalate to when a fix is out of scope
+#
+# Adding a new entry takes effect on the next cycle — no service restart.
+
+# ---------------------------------------------------------------------------
+# Coding fleet — opens PRs against your-org/your-repo
+# ---------------------------------------------------------------------------
+[[orchestrator]]
+name           = "coding-fleet"
+description    = "Backlog-driven feature/bugfix PR fleet"
+repo           = "your-org/your-repo"
+default_branch = "main"
+
+# Where the monitor finds this org's logs + state. Sync them in via your
+# preferred mechanism (rsync, s3 sync, shared volume, etc.) — the monitor
+# only needs to read.
+logs_path   = "./incoming-logs/coding-fleet"
+state_db    = "./incoming-logs/coding-fleet/state.db"
+
+# Token used by the fixer subagent when pushing dev-ops-fix/* branches.
+github_token = { env = "GH_TOKEN_CODING" }
+
+# "pr"          → push branch + open PR labelled dev-ops-autofix (default)
+# "push-direct" → push to default_branch directly (only for trusted infra repos)
+fix_strategy = "pr"
+
+# Verifier strategy: how to confirm the fix unblocks the org.
+# "rerun-once"  → run `agent-orchestrator --once` against the affected backlog
+# "tests-only"  → run the repo's test suite (faster, less faithful)
+# "manual"      → wait for a human ack via INCIDENTS.md edit
+verify_strategy = "rerun-once"
+
+contacts        = ["@oncall-eng"]
+escalate_label  = "needs-human"
+
+# ---------------------------------------------------------------------------
+# Marketing fleet — produces directory deliverables, no PRs
+# ---------------------------------------------------------------------------
+[[orchestrator]]
+name           = "marketing-fleet"
+description    = "Content production fleet (blog, social, briefs)"
+repo           = "your-org/marketing-content"
+default_branch = "main"
+
+logs_path    = "./incoming-logs/marketing-fleet"
+state_db     = "./incoming-logs/marketing-fleet/state.db"
+github_token = { env = "GH_TOKEN_MARKETING" }
+fix_strategy = "pr"
+
+# Marketing fleet doesn't have a CI suite to run; verifier just re-runs the
+# affected cycle in dry-run mode and confirms the deliverable rendered.
+verify_strategy = "rerun-once"
+
+contacts       = ["@marketing-lead"]
+escalate_label = "needs-human"
+
+# ---------------------------------------------------------------------------
+# Research fleet — edits a backlog file in place
+# ---------------------------------------------------------------------------
+[[orchestrator]]
+name           = "research-fleet"
+description    = "Personal research/triage agent"
+repo           = "your-org/research-notes"
+default_branch = "main"
+
+logs_path    = "./incoming-logs/research-fleet"
+state_db     = "./incoming-logs/research-fleet/state.db"
+github_token = { env = "GH_TOKEN_RESEARCH" }
+fix_strategy = "pr"
+
+verify_strategy = "tests-only"
+
+contacts       = ["@you"]
+escalate_label = "needs-human"
+
+# ---------------------------------------------------------------------------
+# Global thresholds the monitor uses to decide when to open an incident.
+# Per-orchestrator overrides go inline above.
+# ---------------------------------------------------------------------------
+[thresholds]
+# A cycle is "stuck" if it's been the current_cycle for this many minutes
+# without a status update.
+stuck_cycle_minutes      = 45
+
+# Open an incident if N consecutive cycles produce no shippable output.
+no_progress_cycle_count  = 3
+
+# Open an incident if today's spend is within $X of the daily budget cap.
+budget_alert_remaining   = 1.0
+
+# Open an incident if a PR has been open with failing CI for this long.
+pr_failing_ci_minutes    = 60

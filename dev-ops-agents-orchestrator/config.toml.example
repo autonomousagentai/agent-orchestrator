@@ -1,0 +1,62 @@
+# dev-ops-agents-orchestrator config.
+#
+# This service watches OTHER agent-orchestrator deployments. Each cycle:
+#   1. monitor subagent sweeps incoming-logs/ for problems → opens incidents
+#   2. picks the highest-priority Ready incident
+#   3. diagnostician → fixer → verifier dispatched via the Task tool
+#   4. INCIDENTS.md flips to Resolved; a fix report drops into deliverables/
+#
+# Code fixes for watched orgs are pushed by the fixer subagent directly to
+# the affected repo (on a dev-ops-fix/<slug> branch). This orchestrator's
+# own shipper just records the audit trail locally.
+
+[orchestrator]
+poll_interval_seconds   = 90
+watch_interval_seconds  = 60
+no_progress_pause_after = 4
+daily_budget_usd        = 20.0
+cycle_budget_usd        = 2.5
+
+[paths]
+workspaces_dir = "./workspaces"
+logs_dir       = "./logs"
+db_path        = "./state.db"
+
+[agents]
+model           = "claude-sonnet-4-6"
+max_turns       = 250
+permission_mode = "acceptEdits"
+# Pull in this repo's .claude/ so the in-session agent has access to the
+# monitor / diagnostician / fixer / verifier subagent definitions.
+setting_sources = ["project"]
+prompt_file     = "./prompts/cycle.md"
+
+[backlog]
+type             = "markdown"
+path             = "./workspace/INCIDENTS.md"
+status_field     = "Status"
+done_values      = ["Resolved", "Escalated"]
+acceptance_field = "Resolution-Criteria"
+
+[workspace]
+type = "directory"
+
+[workspace.directory]
+# The workspace holds:
+#   INCIDENTS.md            — the incident backlog
+#   monitored/<org>/        — git clones of each watched org's repo
+#   incoming-logs/<org>/    — synced log/state snapshots from each watched org
+#   scratch/                — wiped each cycle
+path            = "./workspace"
+wipe_subdirs    = ["scratch"]
+ignore_patterns = [".git", "__pycache__", ".DS_Store", "*.lock"]
+
+[shipper]
+type = "directory"
+
+[shipper.directory]
+# After each Resolved incident, copy the analysis + patch + verifier log
+# into deliverables/<incident-slug>/ as an audit trail.
+deliverables_dir           = "./deliverables"
+version_existing           = true
+reset_workspace_after_ship = false   # keep monitored/ + incoming-logs/ between cycles

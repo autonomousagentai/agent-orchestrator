@@ -1,0 +1,98 @@
+# Incidents — watched orchestrator failures
+
+Each `### slug:` block is one incident detected on a watched orchestrator.
+The dev-ops cycle picks the highest-priority **Ready** incident, dispatches
+diagnostician → fixer → verifier, and flips Status to **Resolved** when the
+patch is confirmed to unblock the affected fleet.
+
+**Lifecycle**
+
+```
+Ready → Investigating → Fixing → Verifying → Resolved
+                              ↘ Sent-Back → Fixing
+                ↘ Escalated     (Owner: human, no autonomous action)
+```
+
+**Adding incidents**
+
+The monitor subagent appends new entries automatically each cycle. You can
+also hand-author incidents here when you spot something monitoring missed —
+the cycle treats them identically.
+
+---
+
+### coding-fleet-cycle-178-syntax-error: SyntaxError in src/api/middleware/rate_limit.py blocks every cycle
+
+- **Type:** code-bug
+- **Status:** Ready
+- **Priority:** P0
+- **Owner:** dev-ops
+- **Affected-Orchestrator:** coding-fleet
+- **Affected-Repo:** your-org/your-repo
+- **First-Seen:** 2026-05-02T08:14Z
+- **Symptom:** Every cycle since 178 halts with `SyntaxError: invalid syntax (rate_limit.py, line 47)`. CI red on main. No PRs merging.
+- **Evidence:**
+  - `incoming-logs/coding-fleet/cycle-178.jsonl` — exception trace
+  - `incoming-logs/coding-fleet/cycle-179.jsonl` — same trace, different cycle
+  - `incoming-logs/coding-fleet/orchestrator.log` lines 4012-4028
+- **Suspected-Cause:** PR #2341 (auto-merged by coding-fleet) introduced an unclosed paren on line 47.
+- **Resolution-Criteria:**
+  - Patch compiles (`python -m py_compile src/api/middleware/rate_limit.py`)
+  - Existing rate-limit tests pass
+  - Coding-fleet's next cycle reaches `CYCLE_DONE` without the SyntaxError
+  - PR labelled `dev-ops-autofix`
+
+### marketing-fleet-no-progress-3x: 3 consecutive no-task cycles, possible backlog drift
+
+- **Type:** orchestrator-stall
+- **Status:** Ready
+- **Priority:** P1
+- **Owner:** dev-ops
+- **Affected-Orchestrator:** marketing-fleet
+- **Affected-Repo:** your-org/marketing-content
+- **First-Seen:** 2026-05-02T07:55Z
+- **Symptom:** Marketing fleet returned `outcome=no-task` on cycles 412, 413, 414 in a row, hit `no_progress_pause_after`, halted.
+- **Evidence:**
+  - `incoming-logs/marketing-fleet/orchestrator.log` lines 9881-9920
+  - `incoming-logs/marketing-fleet/cycle-414.jsonl`
+- **Suspected-Cause:** Either (a) all backlog tasks have unmet `Depends-On`, (b) the Stage field name was renamed in a recent edit, or (c) `done_values` no longer matches the markdown.
+- **Resolution-Criteria:**
+  - Diagnostician identifies which of (a)/(b)/(c) it is
+  - If config drift: open PR fixing config or backlog
+  - If backlog actually exhausted: change Status to **Escalated**, Owner: human
+  - Marketing-fleet's next cycle picks up a task
+
+### coding-fleet-pr-2350-stuck-ci: PR #2350 has failing CI for 90 min
+
+- **Type:** ci-failure
+- **Status:** Investigating
+- **Priority:** P2
+- **Owner:** dev-ops
+- **Affected-Orchestrator:** coding-fleet
+- **Affected-Repo:** your-org/your-repo
+- **First-Seen:** 2026-05-02T06:30Z
+- **Symptom:** Required `ci` workflow has been failing on PR #2350 since opening. Coding-fleet's auto-merge can't proceed; the slug is stuck `in_flight`.
+- **Evidence:**
+  - GitHub PR #2350 checks
+  - `incoming-logs/coding-fleet/cycle-176.jsonl`
+- **Suspected-Cause:** Flaky integration test `test_search_results_pagination` (known flaky per the docs).
+- **Resolution-Criteria:**
+  - Confirm the failure is the known-flake (vs. a real regression)
+  - If flake: re-run CI; if it passes, close incident
+  - If real: send-back to coding-fleet (re-open the slug as Ready) with a note
+
+### coding-fleet-token-rotated: GitHub token expired, pushes failing
+
+- **Type:** credential
+- **Status:** Escalated
+- **Priority:** P0
+- **Owner:** human
+- **Affected-Orchestrator:** coding-fleet
+- **Affected-Repo:** your-org/your-repo
+- **First-Seen:** 2026-05-02T05:00Z
+- **Symptom:** Every cycle's `git push` returns 403. Coding-fleet halts.
+- **Evidence:** `incoming-logs/coding-fleet/orchestrator.log` line 4001 — `remote: Token expired.`
+- **Resolution-Criteria:**
+  - Human rotates `GH_TOKEN_CODING` in the secrets store
+  - dev-ops orchestrator restarts coding-fleet (or coding-fleet auto-recovers on next poll)
+- **Note:** Credential rotation is intentionally out-of-scope for autonomous fix. Escalated.
