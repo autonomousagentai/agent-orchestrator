@@ -39,16 +39,18 @@ jobs:
       - name: Forbidden tracked paths
         run: |
           FORBIDDEN='(?i)(^|/)(\.env([._-][^/]*)?|[^/]+\.env|\.envrc)$|(^|/)\.secrets/|\.(pem|key|p12|pfx|jks|keystore|ppk|tfstate)$|\.tfstate\.backup$|(^|/)id_(rsa|dsa|ed25519|ecdsa)(\.pub)?$|(^|/)\.claude/[^/]*\.local\.[^/]+$|(^|/)\.claude/launch\.json$|(^|/)settings\.local\.json$|(^|/)claude\.local\.md$|(^|/)\.(netrc|git-credentials|htpasswd)$'
-          EXEMPT='(?i)(^|/)[^/]*\.(example|sample|template)(\.[^/]+)?$|(^|/)(example|sample|template)\.env$'
+          EXEMPT='(?i)(^|/)[^/]*\.(example|sample|template)(\.env)?$|(^|/)(example|sample|template)\.env$'
           allow=$(mktemp)
           if [ -f .repo-guard-allow ]; then
             tr -d '\r' < .repo-guard-allow | sed -E 's/[[:space:]]+$//' | grep -vE '^[[:space:]]*(#|$)' > "$allow" || true
           fi
           # -z: no C-quoting of non-ASCII paths, so anchors still match.
+          # Each grep may exit 1 (no match) but never 2 (error): an erroring
+          # regex must fail the check, not pass it with empty output.
           bad=$(git ls-files -z \
-                | { grep -zP "$FORBIDDEN" || true; } \
-                | { grep -zvP "$EXEMPT" || true; } \
-                | { grep -zvxF -f "$allow" || true; } \
+                | { grep -zP "$FORBIDDEN"; rc=$?; [ $rc -le 1 ]; } \
+                | { grep -zvP "$EXEMPT"; rc=$?; [ $rc -le 1 ]; } \
+                | { grep -zvxF -f "$allow"; rc=$?; [ $rc -le 1 ]; } \
                 | tr '\0' '\n')
           if [ -n "$bad" ]; then
             echo "::error::Forbidden files are tracked in this repo:"
@@ -93,8 +95,8 @@ jobs:
           regex = '''\bsk[A-Za-z0-9]{80,}\b'''
           keywords = ["sk"]
           [allowlist]
-          description = "Machine-generated lockfiles (integrity hashes look like secrets)"
-          paths = ['''(^|/)(pnpm-lock\.yaml|package-lock\.json|bun\.lockb?|yarn\.lock)$''']
+          description = "Lockfile integrity hashes (not whole lockfiles: they can hold registry tokens)"
+          regexes = ['''sha(1|256|384|512)-[A-Za-z0-9+/]+=*''']
           TOML
           echo "GUARD_GITLEAKS_CONFIG=$RUNNER_TEMP/guard-gitleaks.toml" >> "$GITHUB_ENV"
 
