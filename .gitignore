@@ -29,3 +29,44 @@ deliverables/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+
+# >>> autonomousagentai repo-guard (managed block; edit in autonomousagentai/.github)
+# Secrets and env files
+.env
+.env.*
+.env-*
+.env_*
+*.env
+.envrc
+!.env.example
+!.env.sample
+!.env.template
+!*.example
+.secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.ppk
+*.tfstate
+*.tfstate.backup
+.netrc
+.git-credentials
+.htpasswd
+id_rsa*
+id_dsa*
+id_ed25519*
+id_ecdsa*
+# Local agent / editor state (never commit, never deploy)
+.claude/settings.local.json
+.claude/*.local.*
+.claude/launch.json
+CLAUDE.local.md
+# OS and editor junk
+.DS_Store
+Thumbs.db
+*.bak
+*.backup
+# <<< autonomousagentai repo-guard
