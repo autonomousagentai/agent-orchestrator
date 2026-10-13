@@ -38,7 +38,7 @@ jobs:
       # Keep FORBIDDEN/EXEMPT in sync with repo-guard/apply_api.py.
       - name: Forbidden tracked paths
         run: |
-          FORBIDDEN='(?i)(^|/)(\.env([._-][^/]*)?|[^/]+\.env|\.envrc)$|(^|/)\.secrets/|\.(pem|key|p12|pfx|jks|keystore|ppk|tfstate)$|\.tfstate\.backup$|(^|/)id_(rsa|dsa|ed25519|ecdsa)(\.pub)?$|(^|/)\.claude/[^/]*\.local\.[^/]+$|(^|/)\.claude/launch\.json$|(^|/)settings\.local\.json$|(^|/)claude\.local\.md$|(^|/)\.(netrc|git-credentials|htpasswd)$|(^|/)\.gitleaks\.toml$'
+          FORBIDDEN='(?i)(^|/)(\.env([._-][^/]*)?|[^/]+\.env|\.envrc)$|(^|/)\.secrets/|\.(pem|key|p12|pfx|jks|keystore|ppk|tfstate)$|\.tfstate\.backup$|(^|/)id_(rsa|dsa|ed25519|ecdsa)(\.pub)?$|(^|/)\.claude/[^/]*\.local\.[^/]+$|(^|/)\.claude/launch\.json$|(^|/)settings\.local\.json$|(^|/)claude\.local\.md$|(^|/)\.(netrc|git-credentials|htpasswd)$'
           EXEMPT='(?i)(^|/)[^/]*\.(example|sample|template)(\.[^/]+)?$|(^|/)(example|sample|template)\.env$'
           allow=$(mktemp)
           if [ -f .repo-guard-allow ]; then
@@ -77,22 +77,36 @@ jobs:
           mkdir -p bin && tar -xzf gitleaks.tgz -C bin gitleaks
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 
-      # A committed .gitleaks.toml could allowlist everything; it is also a
-      # forbidden path above. .gitleaksignore is allowed: it only holds exact
-      # finding fingerprints, each reviewed.
-      - name: Neutralize repo-supplied gitleaks config
+      # The guard always scans with its OWN config, passed explicitly, so a
+      # repo's .gitleaks.toml (which may legitimately add rules for that repo's
+      # own scans) can never weaken it. .gitleaksignore is honoured: it only
+      # holds exact, reviewed finding fingerprints.
+      - name: Write guard gitleaks config
         run: |
-          if [ -f .gitleaks.toml ]; then echo "::warning::Ignoring repo .gitleaks.toml"; rm -f .gitleaks.toml; fi
+          cat > "$RUNNER_TEMP/guard-gitleaks.toml" <<'TOML'
+          title = "autonomousagentai repo-guard"
+          [extend]
+          useDefault = true
+          [[rules]]
+          id = "sanity-api-token"
+          description = "Sanity API token (sk + ~180 base62); the default rules miss inline Bearer use"
+          regex = '''\bsk[A-Za-z0-9]{80,}\b'''
+          keywords = ["sk"]
+          [allowlist]
+          description = "Machine-generated lockfiles (integrity hashes look like secrets)"
+          paths = ['''(^|/)(pnpm-lock\.yaml|package-lock\.json|bun\.lockb?|yarn\.lock)$''']
+          TOML
+          echo "GUARD_GITLEAKS_CONFIG=$RUNNER_TEMP/guard-gitleaks.toml" >> "$GITHUB_ENV"
 
       - name: Secret scan (current tree)
-        run: gitleaks dir . --redact --no-banner --exit-code 1 -v
+        run: gitleaks dir . --config "$GUARD_GITLEAKS_CONFIG" --redact --no-banner --exit-code 1 -v
 
       - name: Secret scan (new commits on this PR)
         if: github.event_name == 'pull_request'
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
-        run: gitleaks git . --redact --no-banner --exit-code 1 -v --log-opts="$BASE..$HEAD"
+        run: gitleaks git . --config "$GUARD_GITLEAKS_CONFIG" --redact --no-banner --exit-code 1 -v --log-opts="$BASE..$HEAD"
 
       - name: Secret scan (commits in this push)
         if: github.event_name == 'push'
@@ -102,7 +116,7 @@ jobs:
         run: |
           if [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
             echo "New branch or force-push: scanning full history."
-            gitleaks git . --redact --no-banner --exit-code 1 -v
+            gitleaks git . --config "$GUARD_GITLEAKS_CONFIG" --redact --no-banner --exit-code 1 -v
           else
-            gitleaks git . --redact --no-banner --exit-code 1 -v --log-opts="$BEFORE..$AFTER"
+            gitleaks git . --config "$GUARD_GITLEAKS_CONFIG" --redact --no-banner --exit-code 1 -v --log-opts="$BEFORE..$AFTER"
           fi
