@@ -1,65 +1,108 @@
 name: repo-guard
 
-# Org-wide guard (canonical copy: autonomousagentai/.github). Do not weaken.
-#   1. Blocks tracked secrets/env/agent-local files (forbidden paths).
-#   2. Verifies the managed .gitignore block is present.
-#   3. Scans the tree, and on PRs the new commits, for secrets (gitleaks).
+# Company-wide guard (canonical copy: autonomousagentai/.github, repo-guard/).
+# Do not weaken. Edit the canonical copy and re-roll it out instead.
+#   1. Blocks tracked secrets/env/key/agent-local files (forbidden paths).
+#   2. Requires the managed .gitignore block.
+#   3. gitleaks: current tree on every run; new commits on PRs and pushes.
+# This stops accidents. Without branch protection (GitHub Free) a determined
+# committer can still edit this file; deploys `needs:` this job so a red guard
+# blocks the deploy.
 
 on:
   pull_request:
   push:
     branches: [main, master]
+  # Deploy workflows call this as a job and `needs:` it.
+  workflow_call:
 
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash   # explicit => bash -eo pipefail
+
 jobs:
   guard:
     runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: 8.21.2
+      GITLEAKS_SHA256: 5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # Kept inline (not a checkout of this repo): a caller's GITHUB_TOKEN cannot
-      # read the private autonomousagentai/.github repo. Mirror of
-      # repo-guard/check-forbidden-paths.sh; keep the two in sync.
+      # Keep FORBIDDEN/EXEMPT in sync with repo-guard/apply_api.py.
       - name: Forbidden tracked paths
         run: |
-          PATTERN='(^|/)\.env$|(^|/)\.env\.(?!example$|sample$|template$)[^/]+$|(^|/)\.secrets/|\.(pem|key|p12|pfx)$|(^|/)id_(rsa|ed25519|ecdsa)(\.pub)?$|(^|/)\.claude/[^/]*\.local\.[^/]+$|(^|/)\.claude/launch\.json$|(^|/)settings\.local\.json$'
+          FORBIDDEN='(?i)(^|/)(\.env([._-][^/]*)?|[^/]+\.env|\.envrc)$|(^|/)\.secrets/|\.(pem|key|p12|pfx|jks|keystore|ppk|tfstate)$|\.tfstate\.backup$|(^|/)id_(rsa|dsa|ed25519|ecdsa)(\.pub)?$|(^|/)\.claude/[^/]*\.local\.[^/]+$|(^|/)\.claude/launch\.json$|(^|/)settings\.local\.json$|(^|/)claude\.local\.md$|(^|/)\.(netrc|git-credentials|htpasswd)$|(^|/)\.gitleaks\.toml$'
+          EXEMPT='(?i)(^|/)[^/]*\.(example|sample|template)(\.[^/]+)?$|(^|/)(example|sample|template)\.env$'
           allow=$(mktemp)
-          if [ -f .repo-guard-allow ]; then grep -vE '^\s*(#|$)' .repo-guard-allow > "$allow" || true; fi
-          bad=$(git ls-files | grep -P "$PATTERN" | grep -vxF -f "$allow" || true)
+          if [ -f .repo-guard-allow ]; then
+            tr -d '\r' < .repo-guard-allow | sed -E 's/[[:space:]]+$//' | grep -vE '^[[:space:]]*(#|$)' > "$allow" || true
+          fi
+          # -z: no C-quoting of non-ASCII paths, so anchors still match.
+          bad=$(git ls-files -z \
+                | { grep -zP "$FORBIDDEN" || true; } \
+                | { grep -zvP "$EXEMPT" || true; } \
+                | { grep -zvxF -f "$allow" || true; } \
+                | tr '\0' '\n')
           if [ -n "$bad" ]; then
             echo "::error::Forbidden files are tracked in this repo:"
             echo "$bad" | sed 's/^/  - /'
             echo "Remove with 'git rm --cached <path>', gitignore it, and rotate any credential it held."
-            echo "A reviewed exception can be listed in .repo-guard-allow."
+            echo "A reviewed exception can be listed in .repo-guard-allow (exact path per line)."
             exit 1
           fi
           echo "repo-guard: no forbidden paths tracked."
 
       - name: Managed .gitignore block present
         run: |
-          if ! grep -q '>>> autonomousagentai repo-guard' .gitignore 2>/dev/null; then
-            echo "::error::.gitignore is missing the managed repo-guard block (see autonomousagentai/.github/repo-guard/standard.gitignore)."
+          if ! grep -q '>>> autonomousagentai repo-guard' .gitignore 2>/dev/null \
+             || ! grep -q '<<< autonomousagentai repo-guard' .gitignore \
+             || ! grep -qx '\.env' .gitignore; then
+            echo "::error::.gitignore is missing (or has a gutted) managed repo-guard block. See autonomousagentai/.github repo-guard/standard.gitignore."
             exit 1
           fi
 
-      - name: Install gitleaks
-        env:
-          GITLEAKS_VERSION: 8.21.2
+      - name: Install gitleaks (checksum-verified)
         run: |
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
-            | tar -xz -C /usr/local/bin gitleaks
-          gitleaks version
+          cd "$RUNNER_TEMP"
+          curl -sSfL -o gitleaks.tgz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tgz" | sha256sum -c -
+          mkdir -p bin && tar -xzf gitleaks.tgz -C bin gitleaks
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      # A committed .gitleaks.toml could allowlist everything; it is also a
+      # forbidden path above. .gitleaksignore is allowed: it only holds exact
+      # finding fingerprints, each reviewed.
+      - name: Neutralize repo-supplied gitleaks config
+        run: |
+          if [ -f .gitleaks.toml ]; then echo "::warning::Ignoring repo .gitleaks.toml"; rm -f .gitleaks.toml; fi
 
       - name: Secret scan (current tree)
         run: gitleaks dir . --redact --no-banner --exit-code 1 -v
 
       - name: Secret scan (new commits on this PR)
         if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: gitleaks git . --redact --no-banner --exit-code 1 -v --log-opts="$BASE..$HEAD"
+
+      - name: Secret scan (commits in this push)
+        if: github.event_name == 'push'
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
         run: |
-          gitleaks git . --redact --no-banner --exit-code 1 -v \
-            --log-opts="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          if [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            echo "New branch or force-push: scanning full history."
+            gitleaks git . --redact --no-banner --exit-code 1 -v
+          else
+            gitleaks git . --redact --no-banner --exit-code 1 -v --log-opts="$BEFORE..$AFTER"
+          fi
