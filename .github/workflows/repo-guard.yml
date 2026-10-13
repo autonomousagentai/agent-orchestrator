@@ -1,0 +1,65 @@
+name: repo-guard
+
+# Org-wide guard (canonical copy: autonomousagentai/.github). Do not weaken.
+#   1. Blocks tracked secrets/env/agent-local files (forbidden paths).
+#   2. Verifies the managed .gitignore block is present.
+#   3. Scans the tree, and on PRs the new commits, for secrets (gitleaks).
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Kept inline (not a checkout of this repo): a caller's GITHUB_TOKEN cannot
+      # read the private autonomousagentai/.github repo. Mirror of
+      # repo-guard/check-forbidden-paths.sh; keep the two in sync.
+      - name: Forbidden tracked paths
+        run: |
+          PATTERN='(^|/)\.env$|(^|/)\.env\.(?!example$|sample$|template$)[^/]+$|(^|/)\.secrets/|\.(pem|key|p12|pfx)$|(^|/)id_(rsa|ed25519|ecdsa)(\.pub)?$|(^|/)\.claude/[^/]*\.local\.[^/]+$|(^|/)\.claude/launch\.json$|(^|/)settings\.local\.json$'
+          allow=$(mktemp)
+          if [ -f .repo-guard-allow ]; then grep -vE '^\s*(#|$)' .repo-guard-allow > "$allow" || true; fi
+          bad=$(git ls-files | grep -P "$PATTERN" | grep -vxF -f "$allow" || true)
+          if [ -n "$bad" ]; then
+            echo "::error::Forbidden files are tracked in this repo:"
+            echo "$bad" | sed 's/^/  - /'
+            echo "Remove with 'git rm --cached <path>', gitignore it, and rotate any credential it held."
+            echo "A reviewed exception can be listed in .repo-guard-allow."
+            exit 1
+          fi
+          echo "repo-guard: no forbidden paths tracked."
+
+      - name: Managed .gitignore block present
+        run: |
+          if ! grep -q '>>> autonomousagentai repo-guard' .gitignore 2>/dev/null; then
+            echo "::error::.gitignore is missing the managed repo-guard block (see autonomousagentai/.github/repo-guard/standard.gitignore)."
+            exit 1
+          fi
+
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: 8.21.2
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+
+      - name: Secret scan (current tree)
+        run: gitleaks dir . --redact --no-banner --exit-code 1 -v
+
+      - name: Secret scan (new commits on this PR)
+        if: github.event_name == 'pull_request'
+        run: |
+          gitleaks git . --redact --no-banner --exit-code 1 -v \
+            --log-opts="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
