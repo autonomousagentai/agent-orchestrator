@@ -96,7 +96,7 @@ jobs:
           keywords = ["sk"]
           [allowlist]
           description = "Lockfile integrity hashes (not whole lockfiles: they can hold registry tokens)"
-          regexes = ['''sha(1|256|384|512)-[A-Za-z0-9+/]+=*''']
+          regexes = ['''^sha(1|256|384|512)-[A-Za-z0-9+/]+=*$''']
           TOML
           echo "GUARD_GITLEAKS_CONFIG=$RUNNER_TEMP/guard-gitleaks.toml" >> "$GITHUB_ENV"
 
